@@ -1,129 +1,154 @@
-const User = require("../models/user.models");
-const AppError = require("../utils/error.util");
+import User from "../models/user.models.js";
+import AppError from "../utils/error.util.js";
+// import cloudinary from "../config/cloudinary.js";
+import { v2 as cloudinary } from "cloudinary";
+import fs from "fs";
+
 
 const cookieOption = {
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    httpOnly: true,
-    secure: true
-}
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+};
 
-// ! register user
+// ================= REGISTER =================
 const register = async (req, res, next) => {
-    try {
-        const { name, email, password } = req.body;
+  try {
+    const { name, email, password } = req.body;
 
-        if (!name || !email || !password) {
-            return next(new AppError('All fields Are required ', 400));
-        }
-        const userExists = await User.findOne({ email });
-
-        if (userExists) {
-            return next(new AppError('Email Already Exists', 400));
-        }
-        const user = await User.create({
-            name,
-            email,
-            password,
-            avatar: {
-                public_id: email,
-                secure_url: 'https://cdn.pixabay.com/photo/2017/02/23/13/05/avatar-2092113_1280.png'
-            }
-        })
-
-        if (!user) {
-            return next(new AppError('user registration faild please try again', 400));
-        }
-
-        await user.save();
-
-        user.password = undefined;
-
-        const token = await user.generateToken();
-
-        res.cookie('token', token, cookieOption)
-
-        res.status(201).json({
-            success: true,
-            message: 'User register Successfully',
-            user
-        })
-    } catch (error) {
-        return next(new AppError(error.message, 400));
+    if (!name || !email || !password) {
+      throw new AppError("All fields are required", 400);
     }
-}
 
-//! login user
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      throw new AppError("Email already exists", 400);
+    }
 
-const login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+    const user = await User.create({
+      name,
+      email,
+      password,
+      avatar: {
+        public_id: email,
+        secure_url:
+          "https://res.cloudinary.com/demo/image/upload/getting-started/shoes.jpg",
+      },
+    });
 
-        if (!email || !password) {
-            return next(new AppError('All field are required ', 400));
+    if (!user) {
+      throw new AppError("User register failed please try again", 400);
+    }
+
+    // console.log("sjhdgjg", JSON.stringify(req.file));
+    // File upload
+    if (req.file) {
+      console.log(req.file);
+
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: "lms",
+          width: 250,
+          height: 250,
+          gravity: "faces",
+          crop: "fill",
+        });
+
+
+        if (result) {
+          user.avatar.public_id = result.public_id;
+          user.avatar.secure_url = result.secure_url;
         }
 
-        const user = await User.findOne({ email }).select('+password');
-        if (!user || !user.comparePassword(password)) {
-            return next(new AppError('Email or password does not match', 400));
-        }
+        // Remove file from server
+        fs.rmSync(`uploadds/${req.file.filename}`, { force: true });
 
-        const token = await user.generateToken();
-        res.cookie('token', token, cookieOption);
-
-        res.status.json({
-            successs: true,
-            message: 'User Login Successfully',
-            user,
-        })
-    } catch (error) {
-        return next(new AppError(error.message, 400));
+      } catch (error) {
+        new AppError(error || 'File not uploaded , please try again', 500)
+      }
     }
-}
 
-//! get profile logined user
+    await user.save();
+    user.password = undefined;
 
-const profile = async (req, res) => {
-    try {
-     const userId =req.user.id;
-     const user=await User.findById(userId);
+    const token = user.generateToken();
+    res.cookie("token", token, cookieOption);
 
-     res.status(200).json({
-        success:true,
-        message:'User Details',
-        user,
-     })
-
-    } catch (error) {
-        return next(new AppError('Faield to fetch user profile', 400));
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      user,
+    });
+  } catch (error) {
+    // ✅ SAFETY FIX
+    if (typeof next === "function") {
+      return next(error);
     }
-}
 
-//!user logout
+    // fallback (rare case)
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ================= LOGIN =================
+const login = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      throw new AppError("All fields are required", 400);
+    }
+
+    const user = await User.findOne({ email }).select("+password");
+    if (!user || !(await user.comparePassword(password))) {
+      throw new AppError("Invalid email or password", 400);
+    }
+
+    const token = user.generateToken();
+    user.password = undefined;
+
+    res.cookie("token", token, cookieOption);
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ================= PROFILE =================
+const profile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: "User Details",
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ================= LOGOUT =================
 const logout = async (req, res) => {
-    try {
-        res.cookie('token', null, {
-            secure: true,
-            maxAge: 0,
-            httpOnly: true,
-        })
+  res.cookie("token", null, {
+    httpOnly: true,
+    secure: true,
+    maxAge: 0,
+  });
 
-        res.status(200).json({
-            success: true,
-            message: 'User logged out Successfully'
-        })
+  res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
+};
 
-    } catch (error) {
-        res.status(500).send("Internal Error")
-    }
-}
-
-//! user Detlete Profile
-const deletes = async (req, res) => {
-    try {
-
-    } catch (error) {
-        res.status(500).send("Internal Error")
-    }
-}
-
-module.exports = { register, login, profile, logout, deletes }
+export { register, login, profile, logout };
