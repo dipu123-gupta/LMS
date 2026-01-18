@@ -7,23 +7,22 @@ import {
   forgetPassword,
   resetPassword,
   changePassword,
-  updateProfile
+  updateProfile,
 } from "../controllers/user.controller.js";
 
 import upload from "../middlewares/multer.middleware.js";
-import isLoginedIn from "../middlewares/auth.middleware.js";
+import { isLoggedIn } from "../middlewares/auth.middleware.js"; // ✅ FIX
 
 const authRouter = express.Router();
 
 authRouter.post("/register", upload.single("avatar"), register);
 authRouter.post("/login", login);
-authRouter.get("/profile", isLoginedIn, profile);
-authRouter.get("/logout", isLoginedIn, logout);
+authRouter.get("/profile", isLoggedIn, profile);
+authRouter.get("/logout", isLoggedIn, logout);
 
-// ✅ FORGOT PASSWORD
 authRouter.post("/forgotpassword", forgetPassword);
 authRouter.post("/reset-password/:resetToken", resetPassword);
-authRouter.post("/change-password", isLoginedIn, changePassword);
-authRouter.put("/update", upload.single("avatar"), isLoginedIn, updateProfile);
+authRouter.post("/change-password", isLoggedIn, changePassword);
+authRouter.put("/update", upload.single("avatar"), isLoggedIn, updateProfile);
 
 export default authRouter;

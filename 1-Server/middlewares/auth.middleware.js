@@ -1,21 +1,27 @@
 import jwt from "jsonwebtoken";
 import AppError from "../utils/error.util.js";
 
-const isLoginedIn = async (req, res, next) => {
+const isLoggedIn = async (req, res, next) => {
   const { token } = req.cookies;
 
   if (!token) {
     return next(
-      new AppError("Unauthenticated, please login again", 400)
+      new AppError("Unauthenticated, please login again", 401)
     );
   }
 
-  const payloads = await jwt.verify(
-    token,
-    process.env.SECRET_KEY
-  );
-
-  req.user = payloads;
+  const payload = jwt.verify(token, process.env.SECRET_KEY);
+  req.user = payload;
   next();
 };
-export default isLoginedIn;
+
+const authorizedRole = (...roles) => async (req, res, next) => {
+  if (!roles.includes(req.user.role)) {
+    return next(
+      new AppError("You do not have permission to access this route", 403)
+    );
+  }
+  next();
+};
+
+export { authorizedRole, isLoggedIn };

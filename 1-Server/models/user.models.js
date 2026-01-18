@@ -5,31 +5,35 @@ import crypto from "crypto"; // ✅ IMPORTANT
 
 const userSchema = new mongoose.Schema(
   {
-    name: { 
-      type: String, 
-      required: true, 
-      trim: true 
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-    email: { 
-      type: String, 
-      required: true, 
-      unique: true 
+    email: {
+      type: String,
+      required: true,
+      unique: true,
     },
-    password: { 
-      type: String, 
-      required: true, 
-      select: false 
+    password: {
+      type: String,
+      required: true,
+      select: false,
     },
     avatar: {
       public_id: String,
       secure_url: String,
     },
-    role: { type: String, default: "user" },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
 
     forgetPasswordToken: String,
     forgetPasswordExpiry: Date, // ✅ FIX
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 userSchema.pre("save", async function () {
@@ -50,9 +54,17 @@ userSchema.methods.generatePasswordResetToken = function () {
 };
 
 userSchema.methods.generateToken = function () {
-  return jwt.sign({ id: this._id }, process.env.SECRET_KEY, {
-    expiresIn: process.env.JWT_EXPIRE,
-  });
+  return jwt.sign(
+    {
+      id: this._id,
+      role: this.role, // ✅ ADD THIS
+      email: this.email, // (optional but useful)
+    },
+    process.env.SECRET_KEY,
+    {
+      expiresIn: process.env.JWT_EXPIRE,
+    },
+  );
 };
 
 userSchema.methods.comparePassword = function (password) {

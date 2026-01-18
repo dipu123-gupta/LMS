@@ -6,6 +6,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import errorMiddleware from './middlewares/error.middleware.js';
 import authRouter from './routes/user.routes.js'
+import courseRouter from './routes/course.route.js';
 
 const app = express();
 app.use(express.json());
@@ -24,7 +25,9 @@ app.use('/ping', (req, res) => {
 });
 
 // route of 3 modules
-app.use('/api/vi/user', authRouter)
+app.use('/api/vi/user', authRouter);
+
+app.use('/api/v1/courses',courseRouter)
 
 app.use((req, res) => {
     res.status(404).json({ message: "Route not found" });
