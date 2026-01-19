@@ -32,6 +32,11 @@ const userSchema = new mongoose.Schema(
 
     forgetPasswordToken: String,
     forgetPasswordExpiry: Date, // ✅ FIX
+
+    subscription: {
+      id: String,
+      status: String,
+    },
   },
   { timestamps: true },
 );
@@ -57,8 +62,9 @@ userSchema.methods.generateToken = function () {
   return jwt.sign(
     {
       id: this._id,
-      role: this.role, // ✅ ADD THIS
-      email: this.email, // (optional but useful)
+      role: this.role,
+      email: this.email,
+      subscription: this.subscription,
     },
     process.env.SECRET_KEY,
     {

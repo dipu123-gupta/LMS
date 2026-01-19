@@ -9,7 +9,7 @@ import {
 } from "../controllers/course.controllor.js"; // ✅ spelling fixed
 
 import upload from "../middlewares/multer.middleware.js";
-import { authorizedRole, isLoggedIn } from "../middlewares/auth.middleware.js";
+import { authorizedRole, authorizedSubscriber, isLoggedIn } from "../middlewares/auth.middleware.js";
 
 const courseRouter = Router();
 
@@ -26,7 +26,7 @@ courseRouter.post(
 );
 
 // GET lectures
-courseRouter.get("/:id", isLoggedIn, getLectureByCourseId);
+courseRouter.get("/:id", isLoggedIn,authorizedSubscriber, getLectureByCourseId);
 
 // UPDATE course
 courseRouter.put("/:id", isLoggedIn, authorizedRole("admin"), updateCourse);
