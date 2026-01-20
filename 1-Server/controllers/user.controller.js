@@ -170,24 +170,40 @@ const forgetPassword = async (req, res, next) => {
     await user.save();
 
     const resetPasswordURL =
-      `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+      `${process.env.FRONTEND_URL}/api/vi/user/reset-password/${resetToken}`;
 
     // ✉️ email content (HTML – exactly like image)
     const subject = "Reset Password";
 
-    const message = `
-      <p>You requested a password reset.</p>
-      <p>Click the link below to reset your password:</p>
+ const message = `
+  <h2>Password Reset</h2>
 
-      <a href="${resetPasswordURL}" target="_blank">
-        Reset your password
-      </a>
+  <p>You requested to reset your password.</p>
 
-      <p>If the link does not work, copy and paste this URL into your browser:</p>
-      <p>${resetPasswordURL}</p>
+  <p>
+    <a href="${resetPasswordURL}"
+       target="_blank"
+       style="
+         display:inline-block;
+         padding:12px 20px;
+         background:#2563eb;
+         color:#ffffff;
+         text-decoration:none;
+         border-radius:6px;
+         font-weight:bold;
+       ">
+       Reset Password
+    </a>
+  </p>
 
-      <p>This link will expire in 15 minutes.</p>
-    `;
+  <p>If the button does not work, copy and paste this link into your browser:</p>
+
+  <p>${resetPasswordURL}</p>
+
+  <p>This link will expire in 15 minutes.</p>
+`;
+
+
 
     // 📧 send email
     await sendEmail(email, subject, message);
