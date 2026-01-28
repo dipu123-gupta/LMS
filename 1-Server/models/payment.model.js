@@ -5,7 +5,7 @@ const paymentSchema = new mongoose.Schema(
     razorpay_payment_id: {
       type: String,
       required: true,
-      unique: true, // ✅ FIX
+      unique: false, // ✅ FIX
     },
     razorpay_subscription_id: {
       type: String,
@@ -15,8 +15,17 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    amount: {
+      type: Number, // amount in rupees
+      required: true,
+    },
+
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Payment = mongoose.model("Payment", paymentSchema);

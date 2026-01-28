@@ -1,12 +1,11 @@
 import User from "../models/user.models.js";
+import Course from "../models/course.model.js"; // ✅ ADD
 import Payment from "../models/payment.model.js";
 import AppError from "../utils/error.util.js";
 import crypto from "crypto";
-import {razorpay} from "../server.js"; 
+import { razorpay } from "../server.js";
 
-/* =========================
-   GET RAZORPAY KEY
-========================= */
+/* =====================GET RAZORPAY KEY========================= */
 const getRazorpayApiKey = async (req, res, next) => {
   try {
     res.status(200).json({
@@ -18,139 +17,124 @@ const getRazorpayApiKey = async (req, res, next) => {
   }
 };
 
-/* =========================
-   BUY SUBSCRIPTION
-========================= */
+/* ======================= BUY COURSE (DYNAMIC PRICE) ========================= */
 const buySubscription = async (req, res, next) => {
   try {
+    const { courseId } = req.body;
     const user = await User.findById(req.user.id);
 
-    if (!user) {
-      return next(new AppError("Unauthorized, please login", 401));
-    }
+    if (!user) return next(new AppError("Unauthorized", 401));
+    if (!courseId) return next(new AppError("Course id missing", 400));
 
-    if (user.role === "admin") {
-      return next(
-        new AppError("Admin cannot purchase a subscription", 400)
-      );
-    }
+    // ✅ COURSE FETCH
+    const course = await Course.findById(courseId);
+    if (!course) return next(new AppError("Course not found", 404));
 
-    const subscription = await razorpay.subscriptions.create({
-      plan_id: process.env.RAZORPAY_PLAN_ID,
-      customer_notify: 1,
+    const amount = course.price * 100; // rupees → paise
+
+    // ✅ RAZORPAY ORDER (DYNAMIC AMOUNT)
+    const order = await razorpay.orders.create({
+      amount,
+      currency: "INR",
+      receipt: `course_${courseId}_${Date.now()}`,
     });
-
-    user.subscription.id = subscription.id;
-    user.subscription.status = subscription.status;
-
-    await user.save();
 
     res.status(200).json({
       success: true,
-      subscription_id: subscription.id,
+      order,
+      courseId,
+      amount: course.price,
     });
-  } catch (error) {
-    return next(new AppError(error.message, 500));
+  } catch (err) {
+    next(new AppError(err.message, 500));
   }
 };
 
-/* =========================
-   VERIFY SUBSCRIPTION
-========================= */
+/* ================== VERIFY PAYMENT ================== */
 const verifySubscription = async (req, res, next) => {
   try {
     const {
       razorpay_payment_id,
-      razorpay_subscription_id,
+      razorpay_order_id,
       razorpay_signature,
+      courseId,
     } = req.body;
 
     const user = await User.findById(req.user.id);
 
-    if (!user) {
-      return next(new AppError("Unauthorized, please login", 401));
-    }
-
     const generatedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_SECRET)
-      .update(
-        `${razorpay_payment_id}|${razorpay_subscription_id}`
-      )
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
     if (generatedSignature !== razorpay_signature) {
-      return next(
-        new AppError("Payment not verified, please try again", 400)
-      );
+      return next(new AppError("Payment verification failed", 400));
     }
 
-    // ❌ Payment.create intentionally REMOVED
-    // ✅ webhook will handle DB entry
+    // ✅ COURSE ACCESS
+    if (!user.subscribedCourses.includes(courseId)) {
+      user.subscribedCourses.push(courseId);
+    }
 
     user.subscription.status = "active";
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: "Payment verified successfully",
+      message: "Payment verified & course unlocked",
     });
-  } catch (error) {
-    return next(new AppError(error.message, 500));
+  } catch (err) {
+    next(new AppError(err.message, 500));
   }
 };
 
-/* =========================
-   CANCEL SUBSCRIPTION
-========================= */
+/* ================== CANCEL SUBSCRIPTION ================== */
 const cancelSubscription = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
 
-    if (!user) {
-      return next(new AppError("Unauthorized, please login", 401));
-    }
+    user.subscription.status = "cancelled";
+    user.subscribedCourses = [];
 
-    if (user.role === "admin") {
-      return next(
-        new AppError("Admin cannot cancel subscription", 400)
-      );
-    }
-
-    const subscriptionId = user.subscription.id;
-
-    const subscription = await razorpay.subscriptions.cancel(
-      subscriptionId
-    );
-
-    user.subscription.status = subscription.status;
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: "Subscription cancelled successfully",
+      message: "Subscription cancelled",
     });
-  } catch (error) {
-    return next(new AppError(error.message, 500));
+  } catch (err) {
+    next(new AppError(err.message, 500));
   }
 };
 
-/* =========================
-   GET ALL PAYMENTS (ADMIN)
-========================= */
-const allPayments = async (req, res, next) => {
+/* ========================= ADMIN PAYMENT STATS ========================= */
+const getPaymentStats = async (req, res) => {
   try {
-    const count = Number(req.query.count) || 10;
+    const payments = await Payment.find();
 
-    const subscriptions = await razorpay.subscriptions.all({
-      count,
+    const monthlySalesRecod = new Array(12).fill(0);
+    const monthlyRevenue = new Array(12).fill(0);
+    let totalRevenue = 0;
+
+    payments.forEach((p) => {
+      const month = new Date(p.createdAt).getMonth();
+      monthlySalesRecod[month] += 1;
+      monthlyRevenue[month] += p.amount;
+      totalRevenue += p.amount;
     });
 
     res.status(200).json({
       success: true,
-      subscriptions,
+      count: payments.length,
+      totalRevenue,
+      monthlySalesRecod,
+      monthlyRevenue,
     });
   } catch (error) {
-    return next(new AppError(error.message, 500));
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -159,5 +143,5 @@ export {
   buySubscription,
   verifySubscription,
   cancelSubscription,
-  allPayments,
+  getPaymentStats,
 };

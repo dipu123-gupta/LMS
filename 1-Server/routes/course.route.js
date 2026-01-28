@@ -5,9 +5,9 @@ import {
   getLectureByCourseId,
   removeCourse,
   updateCourse,
-  AddLectureToCourseById,
-} from "../controllers/course.controllor.js"; // ✅ spelling fixed
-
+  addLectureToCourseById,
+  deleteLectureById,
+} from "../controllers/course.controllor.js"; 
 import upload from "../middlewares/multer.middleware.js";
 import { authorizedRole, authorizedSubscriber, isLoggedIn } from "../middlewares/auth.middleware.js";
 
@@ -39,8 +39,18 @@ courseRouter.post(
   "/:id/lecture",
   isLoggedIn,
   authorizedRole("admin"),
-  upload.single("thumbnail"),
-  AddLectureToCourseById
+  upload.single("lecture"),
+  addLectureToCourseById
 );
+
+// DELETE lecture (ADMIN)
+courseRouter.delete(
+  "/:courseId/lecture/:lectureId",
+  isLoggedIn,
+  authorizedRole("admin"),
+  deleteLectureById
+);
+
+
 
 export default courseRouter;

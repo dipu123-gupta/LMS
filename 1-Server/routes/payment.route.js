@@ -4,7 +4,7 @@ import {
   buySubscription,
   verifySubscription,
   cancelSubscription,
-  allPayments,
+  getPaymentStats,
 } from "../controllers/payment.controller.js";
 import { authorizedRole, isLoggedIn } from "../middlewares/auth.middleware.js";
 
@@ -21,6 +21,8 @@ router.post("/verify", isLoggedIn, verifySubscription);
 
 router.post("/unsubscribe", isLoggedIn, cancelSubscription);
 
-router.get("/", isLoggedIn, authorizedRole("admin"), allPayments);
+// router.get("/", isLoggedIn, authorizedRole("admin"), allPayments);
+
+router.get("/stats", isLoggedIn, authorizedRole("admin"), getPaymentStats);
 
 export default router;

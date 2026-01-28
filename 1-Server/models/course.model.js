@@ -22,6 +22,26 @@ const courseSchema = new Schema(
       required: [true, "Category is required"],
     },
 
+    price: {
+      type: Number,
+      required: true, // free course ke liye 0 rakh sakte ho
+      default: 0,
+    },
+    discount: {
+      type: Number, // %
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    finalPrice: {
+      type: Number,
+      default: 0,
+    },
+    isFree: {
+      type: Boolean,
+      default: false,
+    },
+
     thumbnail: {
       public_id: {
         type: String,
@@ -69,6 +89,18 @@ const courseSchema = new Schema(
   },
   { timestamps: true },
 );
+
+courseSchema.pre("save", function () {
+  if (this.price === 0) {
+    this.isFree = true;
+    this.finalPrice = 0;
+  } else {
+    this.isFree = false;
+    this.finalPrice =
+      this.price - Math.floor((this.price * this.discount) / 100);
+  }
+});
+
 
 const Course = model("Course", courseSchema);
 export default Course;

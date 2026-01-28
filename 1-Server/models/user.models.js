@@ -35,7 +35,21 @@ const userSchema = new mongoose.Schema(
 
     subscription: {
       id: String,
-      status: String,
+      status: {
+        type: String,
+        enum: ["created", "active", "cancelled", "expired"],
+        default: "created",
+      },
+    },
+    subscribedCourses: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+      },
+    ],
+
+    activeToken: {
+      type: String,
     },
   },
   { timestamps: true },

@@ -2,8 +2,6 @@ import Course from "../models/course.model.js";
 import AppError from "../utils/error.util.js";
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs/promises";
-
-
 /* =======================
    GET ALL COURSES
 ======================= */
@@ -47,12 +45,16 @@ const getLectureByCourseId = async (req, res, next) => {
 /* =======================
    CREATE COURSE
 ======================= */
-const createCourse = async (req, res, next) => {
-  try {
-    const { title, description, category, createdBy } = req.body;
 
-    if (!title || !description || !category || !createdBy) {
-      return next(new AppError("All fields are required", 400));
+const createCourse = async (req, res,next) => {
+  try {
+    const { title, description, category, createdBy, price, discount } = req.body;
+
+    if (!title || !description || !category || !createdBy || price === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
     }
 
     const course = await Course.create({
@@ -60,6 +62,8 @@ const createCourse = async (req, res, next) => {
       description,
       category,
       createdBy,
+      price,
+      discount,
       thumbnail: {
         public_id: "dummy",
         secure_url: "dummy",
@@ -76,18 +80,22 @@ const createCourse = async (req, res, next) => {
         secure_url: result.secure_url,
       };
 
-      await fs.rm(req.file.path);
+      await fs.rm(req.file.path); // ✅ FIX
     }
 
     await course.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Course created successfully",
       course,
     });
   } catch (error) {
-    next(error);
+    console.error("CREATE COURSE ERROR 👉", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -130,7 +138,7 @@ const updateCourse = async (req, res, next) => {
         secure_url: result.secure_url,
       };
 
-      fs.rmSync(req.file.path);
+      fs.unlinkSync(req.file.path);
     }
 
     await course.save();
@@ -176,7 +184,7 @@ const removeCourse = async (req, res, next) => {
 /* =======================
    AddLectureToCourseById COURSE
 ======================= */
-const AddLectureToCourseById = async (req, res, next) => {
+const addLectureToCourseById = async (req, res, next) => {
   try {
     const { title, description } = req.body;
     const { id } = req.params;
@@ -199,6 +207,7 @@ const AddLectureToCourseById = async (req, res, next) => {
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "lms/lectures",
+        resource_type: "video", // 🔥 THIS IS THE FIX
       });
 
       lectureData.lecture = {
@@ -224,6 +233,51 @@ const AddLectureToCourseById = async (req, res, next) => {
   }
 };
 
+/* =======================
+   DELETE LECTURE
+======================= */
+const deleteLectureById = async (req, res, next) => {
+  try {
+    const { courseId, lectureId } = req.params;
+
+    const course = await Course.findById(courseId);
+
+    if (!course) {
+      return next(new AppError("Course not found", 404));
+    }
+
+    const lecture = course.lectures.find(
+      (lec) => lec._id.toString() === lectureId,
+    );
+
+    if (!lecture) {
+      return next(new AppError("Lecture not found", 404));
+    }
+
+    // 🔥 delete video from cloudinary
+    if (lecture.lecture?.public_id) {
+      await cloudinary.uploader.destroy(lecture.lecture.public_id, {
+        resource_type: "video",
+      });
+    }
+
+    // 🔥 remove lecture from array
+    course.lectures = course.lectures.filter(
+      (lec) => lec._id.toString() !== lectureId,
+    );
+
+    course.numberOfLectures = course.lectures.length;
+
+    await course.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Lecture deleted successfully",
+    });
+  } catch (error) {
+    next(new AppError(error.message, 500));
+  }
+};
 
 export {
   getAllCourse,
@@ -231,5 +285,6 @@ export {
   createCourse,
   updateCourse,
   removeCourse,
-  AddLectureToCourseById,
+  addLectureToCourseById,
+  deleteLectureById,
 };
