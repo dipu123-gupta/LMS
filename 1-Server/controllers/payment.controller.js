@@ -1,11 +1,11 @@
 import User from "../models/user.models.js";
-import Course from "../models/course.model.js"; // ✅ ADD
+import Course from "../models/course.model.js";
 import Payment from "../models/payment.model.js";
 import AppError from "../utils/error.util.js";
 import crypto from "crypto";
 import { razorpay } from "../server.js";
 
-/* =====================GET RAZORPAY KEY========================= */
+/* ===================== GET RAZORPAY KEY ===================== */
 const getRazorpayApiKey = async (req, res, next) => {
   try {
     res.status(200).json({
@@ -17,7 +17,7 @@ const getRazorpayApiKey = async (req, res, next) => {
   }
 };
 
-/* ======================= BUY COURSE (DYNAMIC PRICE) ========================= */
+/* ======================= BUY COURSE (DYNAMIC PRICE) ======================= */
 const buySubscription = async (req, res, next) => {
   try {
     const { courseId } = req.body;
@@ -26,26 +26,36 @@ const buySubscription = async (req, res, next) => {
     if (!user) return next(new AppError("Unauthorized", 401));
     if (!courseId) return next(new AppError("Course id missing", 400));
 
-    // ✅ COURSE FETCH
     const course = await Course.findById(courseId);
     if (!course) return next(new AppError("Course not found", 404));
 
-    const amount = course.price * 100; // rupees → paise
+    if (course.isFree || course.finalPrice === 0) {
+      return next(new AppError("This course is free", 400));
+    }
 
-    // ✅ RAZORPAY ORDER (DYNAMIC AMOUNT)
+    const amount = course.finalPrice * 100;
+
+    console.log("🟡 Razorpay creating order:", {
+      amount,
+      key: process.env.RAZORPAY_KEY_ID,
+    });
+
     const order = await razorpay.orders.create({
       amount,
       currency: "INR",
-      receipt: `course_${courseId}_${Date.now()}`,
+      receipt: `course_${Date.now()}`, // ✅ max 40 chars
     });
+
+    console.log("✅ Razorpay order created:", order.id);
 
     res.status(200).json({
       success: true,
       order,
       courseId,
-      amount: course.price,
+      amount: course.finalPrice,
     });
   } catch (err) {
+    console.error("❌ Razorpay order error:", err);
     next(new AppError(err.message, 500));
   }
 };
@@ -58,6 +68,7 @@ const verifySubscription = async (req, res, next) => {
       razorpay_order_id,
       razorpay_signature,
       courseId,
+      amount,
     } = req.body;
 
     const user = await User.findById(req.user.id);
@@ -78,6 +89,21 @@ const verifySubscription = async (req, res, next) => {
 
     user.subscription.status = "active";
     await user.save();
+
+    // 🔥 PAYMENT SAVE IN DB (MAIN FIX)
+    await Payment.create({
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      amount,
+      user: user._id,
+    });
+
+    console.log("✅ PAYMENT SAVING", {
+      razorpay_payment_id,
+      razorpay_order_id,
+      amount,
+    });
 
     res.status(200).json({
       success: true,
